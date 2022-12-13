@@ -1,11 +1,11 @@
 package org.example.repository;
-
 import org.example.entities.User;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.example.utils.HibernateSessionFactoryUtil.getSessionFactory;
 
@@ -28,16 +28,9 @@ public class UserRepoImpl implements UserRepo {
 
     @Override
     public User findById(Long id) {
-
-        try {
-            session = factory.getCurrentSession();
-            session.beginTransaction();
-            User user = session.get(User.class, id);
-            session.getTransaction().commit();
-            return user;
-        } finally {
-            session.close();
-        }
+        return executeForSession(session -> session
+                .get(User.class, id)
+        );
     }
 
     @Override
@@ -67,46 +60,19 @@ public class UserRepoImpl implements UserRepo {
 
     @Override
     public User findByName(String name) {
-        try {
-            session = factory.getCurrentSession();
-            session.beginTransaction();
-            User user = session
-                    .createQuery("FROM User  u WHERE  u.name =: name", User.class)
-                    .setParameter("name", name).getSingleResult();
-            session.getTransaction().commit();
-            return user;
-        } catch (Exception ex) {
-            session.getTransaction().rollback();
-            return null;
-        } finally {
-            if (session != null) {
-                session.close();
-            }
-        }
+        return executeForSession(session -> session
+                .createQuery("FROM User  u WHERE  u.name =: name", User.class)
+                .setParameter("name", name).getSingleResult()
+        );
     }
-
 
     @Override
     public List<User> findAll() {
-
-        try {
-            session = factory.getCurrentSession();
-            session.beginTransaction();
-            List<User> users = session
-                    .createQuery("SELECT u FROM User u", User.class)
-                    .getResultList();
-            session.getTransaction().commit();
-            return users;
-        } catch (Exception ex) {
-            session.getTransaction().rollback();
-            return null;
-        } finally {
-            if (session != null) {
-                session.close();
-            }
-        }
+        return executeForSession(session -> session
+                .createQuery("FROM User u", User.class)
+                .getResultList()
+        );
     }
-
 
 
     private void executeInTransaction(Consumer<Session> consumer) {
@@ -117,6 +83,21 @@ public class UserRepoImpl implements UserRepo {
             session.getTransaction().commit();
         } catch (Exception ex) {
             session.getTransaction().rollback();
+        } finally {
+            if (session != null) {
+                session.close();
+            }
+        }
+    }
+
+    private <R> R executeForSession(Function<Session, R> function) {
+        session = factory.getCurrentSession();
+        try {
+            session.beginTransaction();
+            return function.apply(session);
+        } catch (Exception ex) {
+            session.getTransaction().rollback();
+            return null;
         } finally {
             if (session != null) {
                 session.close();

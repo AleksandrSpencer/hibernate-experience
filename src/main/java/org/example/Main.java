@@ -63,6 +63,14 @@ public class Main {
         String useName = "Person_8";
         s.showProductsByUser(useName);
 
+        Product productNew = new Product("VeryBadProduct", new BigDecimal(666));
+        s.saveProduct(productNew);
+        System.out.println(productNew);
+        String st = "VeryBadProduct";
+        Product p = s.findProductByName(st);
+        System.out.println(p);
+        s.deleteProductById(p.getId());
+
 
     }
 }

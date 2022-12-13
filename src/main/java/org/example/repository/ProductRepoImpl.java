@@ -6,6 +6,7 @@ import org.hibernate.SessionFactory;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.example.utils.HibernateSessionFactoryUtil.getSessionFactory;
 
@@ -25,68 +26,33 @@ public class ProductRepoImpl implements ProductRepo {
 
     @Override
     public List<Product> findAll() {
-        try {
-            session = factory.getCurrentSession();
-            session.beginTransaction();
-            List<Product> products = session
-                    .createQuery("SELECT p FROM Product p", Product.class)
-                    .getResultList();
-            session.getTransaction().commit();
-            return products;
-        } catch (Exception ex) {
-            session.getTransaction().rollback();
-            return null;
-        } finally {
-            if (session != null) {
-                session.close();
-            }
-        }
+        return executeForSession(session -> session
+                .createQuery("FROM Product p", Product.class)
+                .getResultList()
+        );
     }
+
 
     @Override
     public Product findByName(String name) {
-        try {
-            session = factory.getCurrentSession();
-            session.beginTransaction();
-            Product product = session
-                    .createQuery("FROM Product p WHERE  p.name =: name", Product.class)
-                    .setParameter("name", name).getSingleResult();
-            session.getTransaction().commit();
-            return product;
-        } catch (Exception ex) {
-            session.getTransaction().rollback();
-            return null;
-        } finally {
-            if (session != null) {
-                session.close();
-            }
-        }
+        return executeForSession(session -> session
+                .createQuery("FROM Product p WHERE  p.name =: name", Product.class)
+                .setParameter("name", name).getSingleResult()
+        );
     }
-
 
     @Override
     public Product findById(Long id) {
-        try {
-            session = factory.getCurrentSession();
-            session.beginTransaction();
-            Product product = session.get(Product.class, id);
-            session.getTransaction().commit();
-            return product;
-        } catch (Exception ex) {
-            session.getTransaction().rollback();
-            return null;
-        } finally {
-            if (session != null) {
-                session.close();
-            }
-        }
+        return executeForSession(session -> session
+                .get(Product.class, id)
+        );
     }
 
     @Override
     public void update(Product product) {
-        executeInTransaction(session -> {
-            session.merge(product);
-        });
+        executeInTransaction(session ->
+                session.merge(product)
+        );
     }
 
     @Override
@@ -102,26 +68,36 @@ public class ProductRepoImpl implements ProductRepo {
 
     @Override
     public void delete(Long id) {
-        try {
-            session = factory.getCurrentSession();
-            session.beginTransaction();
-            Product product = session.get(Product.class, id);
-            session.delete(product);
-            session.getTransaction().commit();
-        } finally {
-            session.close();
-        }
+        Product product = this.findById(id);
+        executeInTransaction(session ->
+                session.remove(product)
+        );
     }
 
 
     private void executeInTransaction(Consumer<Session> consumer) {
-        Session session = factory.getCurrentSession();
+        session = factory.getCurrentSession();
         try {
             session.beginTransaction();
             consumer.accept(session);
             session.getTransaction().commit();
         } catch (Exception ex) {
             session.getTransaction().rollback();
+        } finally {
+            if (session != null) {
+                session.close();
+            }
+        }
+    }
+
+    private <R> R executeForSession(Function<Session, R> function) {
+        session = factory.getCurrentSession();
+        try {
+            session.beginTransaction();
+            return function.apply(session);
+        } catch (Exception ex) {
+            session.getTransaction().rollback();
+            return null;
         } finally {
             if (session != null) {
                 session.close();
