@@ -8,6 +8,7 @@ import org.hibernate.SessionFactory;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.example.utils.HibernateSessionFactoryUtil.getSessionFactory;
 
@@ -45,10 +46,8 @@ public class OrderRepoImpl implements OrderRepo {
     }
 
     public void showProductsByUser(String userName) {
-        try {
-            session = factory.getCurrentSession();
-            session.beginTransaction();
-            User user = session
+        executeInTransaction(session -> {
+                    User user = session
                     .createQuery("FROM User  u WHERE  u.name =: name", User.class)
                     .setParameter("name", userName).getSingleResult();
 
@@ -57,61 +56,30 @@ public class OrderRepoImpl implements OrderRepo {
             orders.forEach(o ->
                     System.out.println("Product for " + user.getName() + ": "
                             + o.getProduct().toString()));
-            session.getTransaction().commit();
-        } catch (Exception ex) {
-            session.getTransaction().rollback();
-        } finally {
-            if (session != null) {
-                session.close();
 
-            }
-        }
+                }
+        );
     }
 
     public void findUserByProductTitle(String productTitle) {
+        executeInTransaction(session1 -> {
+                    Product product = session
+                            .createQuery("FROM Product p WHERE  p.name =: name", Product.class)
+                            .setParameter("name", productTitle).getSingleResult();
+                    List<Order> orders = product.getOrders();
 
-        try {
-            session = factory.getCurrentSession();
-            session.beginTransaction();
-
-            Product product = session
-                    .createQuery("FROM Product p WHERE  p.name =: name", Product.class)
-                    .setParameter("name", productTitle).getSingleResult();
-            List<Order> orders = product.getOrders();
-
-            orders.forEach(o ->
-                    System.out.println("User for " + product.getName() + ": "
-                            + o.getUser().toString()));
-            session.getTransaction().commit();
-        } catch (Exception ex) {
-            session.getTransaction().rollback();
-        } finally {
-            if (session != null) {
-                session.close();
-
-            }
-        }
+                    orders.forEach(o ->
+                            System.out.println("User for " + product.getName() + ": "
+                                    + o.getUser().toString()));
+                }
+        );
     }
-
-
     @Override
     public List<Order> findAll() {
-        try {
-            session = factory.getCurrentSession();
-            session.beginTransaction();
-            List<Order> orders = session
-                    .createQuery("SELECT o FROM Order o", Order.class)
-                    .getResultList();
-            session.getTransaction().commit();
-            return orders;
-        } catch (Exception ex) {
-            session.getTransaction().rollback();
-            return null;
-        } finally {
-            if (session != null) {
-                session.close();
-            }
-        }
+        return executeForSession( session -> session
+                                    .createQuery("FROM Order o", Order.class)
+                                    .getResultList()
+        );
     }
 
     private void executeInTransaction(Consumer<Session> consumer) {
@@ -124,6 +92,20 @@ public class OrderRepoImpl implements OrderRepo {
             session.getTransaction().rollback();
         } finally {
             if (session != null) {
+                session.close();
+            }
+        }
+    }
+    private <R> R executeForSession(Function<Session, R> function){
+        session = factory.getCurrentSession();
+        try {
+            session.beginTransaction();
+            return function.apply(session);
+        } catch (Exception ex) {
+            session.getTransaction().rollback();
+            return null;
+        } finally {
+            if(session != null){
                 session.close();
             }
         }
